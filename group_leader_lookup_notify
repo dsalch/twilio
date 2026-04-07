@@ -1,0 +1,137 @@
+const axios = require('axios');
+
+exports.handler = async function(context, event, callback) {
+  const client = context.getTwilioClient();
+  // --- CONFIGURATION ---
+  const API_KEY = "2C87099FF2342A5C391EDFAFDEC8E4D311FC24104D27E76B78EBA03D70DB8B5B673A375F631F03A1"; 
+  const NOTIFICATION_SOURCE_NUM = "+12544143334"; 
+  const DEFAULT_ADMIN_PHONE = "+19516628477"; 
+  const NAME_SEPARATOR = "-";
+
+  // *** DEEP LINK CONFIGURATION (MODAL) ***
+  const CHURCH_BASE = "https://thechurch.chmeetings.com/5F4D2460EB2A3268/Core/Member";
+  // ---------------------
+
+  const senderPhone = event.From;
+  const messageBody = event.Body || "(No Content)";
+  const groupKeyword = event.keyword || "Mentor";
+
+  const normalizePhone = (p) => {
+      if (!p) return "";
+      let clean = String(p).replace(/\D/g, '');
+      if (clean.length === 11 && clean.startsWith('1')) clean = clean.substring(1);
+      return clean;
+  };
+
+  try {
+    console.log(`[SEARCH] Processing for sender ${senderPhone}. Keyword: '${groupKeyword}'`);
+    
+    // 1. FETCH GROUPS AND PEOPLE
+    const [groupsRes, peopleRes] = await Promise.all([
+        axios.get("https://api.chmeetings.com/api/v1/groups", { headers: { 'ApiKey': API_KEY } }),
+        axios.get("https://api.chmeetings.com/api/v1/people?page_size=3000", { headers: { 'ApiKey': API_KEY } }) 
+    ]);
+    let allGroups = groupsRes.data;
+    if (allGroups.data) allGroups = allGroups.data; 
+    if (allGroups.items) allGroups = allGroups.items;
+
+    let allPeople = peopleRes.data;
+    if (allPeople.data) allPeople = allPeople.data;
+    if (allPeople.results) allPeople = allPeople.results;
+
+    // 2. FIND SENDER
+    const target = normalizePhone(senderPhone);
+    const senderProfile = allPeople.find(p => {
+        return normalizePhone(p.mobile) === target || normalizePhone(p.home_phone) === target;
+    });
+
+    if (!senderProfile) {
+        console.log("[RESULT] Sender not found.");
+        return callback(null, { status: "not_found", reason: "sender_unknown" });
+    }
+    
+    const senderId = senderProfile.person_id || senderProfile.id;
+    const senderName = `${senderProfile.first_name} ${senderProfile.last_name}`;
+    
+    // *** GENERATE LONG LINK ***
+    const longLink = `${CHURCH_BASE}(modal:MemberDashboard/%2FCore%2FMember%2FMemberDashboard%2F${senderId})`;
+    
+    // *** SHORTEN LINK (is.gd) ***
+    let finalLink = longLink;
+    try {
+        // Use is.gd which is cleaner and has no deprecation warnings
+        const shortRes = await axios.get(`https://is.gd/create.php?format=simple&url=${encodeURIComponent(longLink)}`);
+        if (shortRes.data && shortRes.data.startsWith('http')) {
+            finalLink = shortRes.data;
+        }
+    } catch (shortErr) {
+        console.error("Link shortening failed, using long link:", shortErr.message);
+    }
+
+    // 3. FIND MENTORS
+    let mentorsNotified = [];
+    let matchedGroups = [];
+    
+    const candidateGroups = allGroups.filter(g => g.name.toLowerCase().includes(groupKeyword.toLowerCase()));
+    
+    for (const group of candidateGroups) {
+        try {
+            const memRes = await axios.get(`https://api.chmeetings.com/api/v1/groups/people?group_ids=${group.id}`, {
+                headers: { 'ApiKey': API_KEY }
+            });
+            let members = memRes.data;
+            if (members.data) members = members.data;
+
+            const isMember = members.some(m => {
+                const mId = m.person_id || m.id;
+                return String(mId) === String(senderId);
+            });
+            
+            if (isMember) matchedGroups.push(group);
+        } catch (e) {}
+    }
+
+    // Notify Mentors
+    for (const group of matchedGroups) {
+        const parts = group.name.split(NAME_SEPARATOR);
+        if (parts.length < 2) continue;
+
+        const mentorNameRaw = parts[1].trim(); 
+        const mentor = allPeople.find(p => {
+            const fullName = `${p.first_name} ${p.last_name}`.toLowerCase();
+            return fullName === mentorNameRaw.toLowerCase();
+        });
+
+        if (mentor && (mentor.mobile || mentor.Mobile)) {
+            const mentorPhone = mentor.mobile || mentor.Mobile;
+            
+            await client.messages.create({
+                from: NOTIFICATION_SOURCE_NUM,
+                to: mentorPhone,
+                body: `From: ${senderName}\n"${messageBody}"\n\nReply: ${finalLink}`
+            });
+            
+            mentorsNotified.push(mentor.first_name);
+        }
+    }
+
+    // 4. FINAL CHECK: IF NO MENTORS -> NOTIFY ADMIN
+    if (mentorsNotified.length === 0) {
+        console.log(`[NOTIFY] No mentor found for ${senderName}. Sending to Admin.`);
+        
+        await client.messages.create({
+            from: NOTIFICATION_SOURCE_NUM,
+            to: DEFAULT_ADMIN_PHONE,
+            body: `From: ${senderName} (No Mentor)\n"${messageBody}"\n\nReply: ${finalLink}`
+        });
+        
+        return callback(null, { status: "handled_by_function", type: "admin_fallback" });
+    }
+
+    return callback(null, { status: "found", count: mentorsNotified.length, mentors: mentorsNotified.join(", ") });
+
+  } catch (error) {
+    console.error(error);
+    return callback(null, { status: "error", error: error.message });
+  }
+};
