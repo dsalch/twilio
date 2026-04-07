@@ -1,0 +1,575 @@
+{
+  "initial_state": "Trigger",
+  "flags": {
+    "allow_concurrent_calls": true
+  },
+  "description": "IVR",
+  "states": [
+    {
+      "name": "Trigger",
+      "type": "trigger",
+      "transitions": [
+        {
+          "next": "A-Check_user",
+          "event": "incomingMessage"
+        },
+        {
+          "next": "play_greeting",
+          "event": "incomingCall"
+        },
+        {
+          "event": "incomingConversationMessage"
+        },
+        {
+          "event": "incomingRequest"
+        },
+        {
+          "event": "incomingParent"
+        }
+      ],
+      "properties": {
+        "offset": {
+          "x": 40,
+          "y": 60
+        }
+      }
+    },
+    {
+      "name": "A-Check_user",
+      "type": "run-function",
+      "transitions": [
+        {
+          "next": "Does_User_Exist",
+          "event": "success"
+        },
+        {
+          "event": "fail"
+        }
+      ],
+      "properties": {
+        "service_sid": "ZS648afd0ac0cdca41c79d2616955a8d06",
+        "environment_sid": "ZE602bb9b1974c5a5c320df1a32fd74da9",
+        "offset": {
+          "x": -700,
+          "y": 290
+        },
+        "function_sid": "ZHc8c2eb18cde6bc710e36342b054ccb0b",
+        "parameters": [
+          {
+            "value": "{{trigger.message.From}}",
+            "key": "From"
+          },
+          {
+            "value": "{{trigger.message.Body}}",
+            "key": "Body"
+          }
+        ],
+        "url": "https://chmeetings-sms-1218.twil.io/process_sms"
+      }
+    },
+    {
+      "name": "Does_User_Exist",
+      "type": "split-based-on",
+      "transitions": [
+        {
+          "event": "noMatch"
+        },
+        {
+          "next": "C-send_and_reply_1",
+          "event": "match",
+          "conditions": [
+            {
+              "friendly_name": "If value equal_to unknown",
+              "arguments": [
+                "{{widgets.A-Check_user.parsed.status}}"
+              ],
+              "type": "equal_to",
+              "value": "unknown"
+            }
+          ]
+        },
+        {
+          "next": "F-NativeForwardMessage",
+          "event": "match",
+          "conditions": [
+            {
+              "friendly_name": "If value equal_to success",
+              "arguments": [
+                "{{widgets.A-Check_user.parsed.status}}"
+              ],
+              "type": "equal_to",
+              "value": "success"
+            }
+          ]
+        }
+      ],
+      "properties": {
+        "input": "{{widgets.A-Check_user.parsed.status}}",
+        "offset": {
+          "x": -700,
+          "y": 580
+        }
+      }
+    },
+    {
+      "name": "C-send_and_reply_1",
+      "type": "send-and-wait-for-reply",
+      "transitions": [
+        {
+          "next": "D-Create_Notify",
+          "event": "incomingMessage"
+        },
+        {
+          "event": "timeout"
+        },
+        {
+          "event": "deliveryFailure"
+        }
+      ],
+      "properties": {
+        "offset": {
+          "x": -700,
+          "y": 890
+        },
+        "service": "{{trigger.message.InstanceSid}}",
+        "channel": "{{trigger.message.ChannelSid}}",
+        "from": "{{flow.channel.address}}",
+        "message_type": "custom",
+        "body": "Hello! We don't recognize this number. To connect you with the right person, please reply with your First and Last Name.",
+        "timeout": "60"
+      }
+    },
+    {
+      "name": "D-Create_Notify",
+      "type": "run-function",
+      "transitions": [
+        {
+          "next": "Welcome_Delay",
+          "event": "success"
+        },
+        {
+          "event": "fail"
+        }
+      ],
+      "properties": {
+        "service_sid": "ZS648afd0ac0cdca41c79d2616955a8d06",
+        "environment_sid": "ZE602bb9b1974c5a5c320df1a32fd74da9",
+        "offset": {
+          "x": -690,
+          "y": 1190
+        },
+        "function_sid": "ZHc8c2eb18cde6bc710e36342b054ccb0b",
+        "parameters": [
+          {
+            "value": "{{trigger.message.From}}",
+            "key": "From"
+          },
+          {
+            "value": "{{trigger.message.Body}}",
+            "key": "Body"
+          },
+          {
+            "value": "{{widgets.C-send_and_reply_1.inbound.Body}}",
+            "key": "SenderName"
+          }
+        ],
+        "url": "https://chmeetings-sms-1218.twil.io/process_sms"
+      }
+    },
+    {
+      "name": "F-NativeForwardMessage",
+      "type": "make-http-request",
+      "transitions": [
+        {
+          "next": "Check_Mentors",
+          "event": "success"
+        },
+        {
+          "event": "failed"
+        }
+      ],
+      "properties": {
+        "offset": {
+          "x": -300,
+          "y": 1740
+        },
+        "method": "POST",
+        "content_type": "application/x-www-form-urlencoded;charset=utf-8",
+        "add_twilio_auth": false,
+        "parameters": [
+          {
+            "value": "{{trigger.message.From}}",
+            "key": "From"
+          },
+          {
+            "value": "{{trigger.message.To}}",
+            "key": "To"
+          },
+          {
+            "value": "{{trigger.message.Body}}",
+            "key": "Body"
+          },
+          {
+            "value": "{{trigger.message.MessageSid}}",
+            "key": "MessageSid"
+          }
+        ],
+        "url": "https://api.chmeetings.com/webhooks/thechurch/twilioresponse"
+      }
+    },
+    {
+      "name": "Welcome_Delay",
+      "type": "send-and-wait-for-reply",
+      "transitions": [
+        {
+          "next": "F-NativeForwardMessage",
+          "event": "incomingMessage"
+        },
+        {
+          "next": "F-NativeForwardMessage",
+          "event": "timeout"
+        },
+        {
+          "event": "deliveryFailure"
+        }
+      ],
+      "properties": {
+        "offset": {
+          "x": -680,
+          "y": 1490
+        },
+        "shorten_urls": true,
+        "service": "{{trigger.message.InstanceSid}}",
+        "channel": "{{trigger.message.ChannelSid}}",
+        "from": "{{flow.channel.address}}",
+        "message_type": "custom",
+        "body": "Thanks! We’ve created your account, and your message is being forwarded now.  Please save this number in your contacts as theCHURCH. \nReply HELP for info. \nReply STOP to unsubscribe. Msg&Data Rates May Apply.",
+        "timeout": "30"
+      }
+    },
+    {
+      "name": "Check_Mentors",
+      "type": "run-function",
+      "transitions": [
+        {
+          "next": "split_1",
+          "event": "success"
+        },
+        {
+          "event": "fail"
+        }
+      ],
+      "properties": {
+        "service_sid": "ZS648afd0ac0cdca41c79d2616955a8d06",
+        "environment_sid": "ZE602bb9b1974c5a5c320df1a32fd74da9",
+        "offset": {
+          "x": -600,
+          "y": 2120
+        },
+        "function_sid": "ZHb910e7b4c865ef3f5d505cf0a8f33101",
+        "parameters": [
+          {
+            "value": "{{trigger.message.From}}",
+            "key": "From"
+          },
+          {
+            "value": "{{trigger.message.Body}}",
+            "key": "Body"
+          },
+          {
+            "value": "Mentor",
+            "key": "keyword"
+          }
+        ],
+        "url": "https://chmeetings-sms-1218.twil.io/group_leader_lookup_notify"
+      }
+    },
+    {
+      "name": "split_1",
+      "type": "split-based-on",
+      "transitions": [
+        {
+          "event": "noMatch"
+        },
+        {
+          "next": "send_message_admin",
+          "event": "match",
+          "conditions": [
+            {
+              "friendly_name": "If value equal_to found",
+              "arguments": [
+                "{{widgets.Check_Mentors.parsed.status}}"
+              ],
+              "type": "equal_to",
+              "value": "not_found"
+            }
+          ]
+        }
+      ],
+      "properties": {
+        "input": "{{widgets.Check_Mentors.parsed.status}}",
+        "offset": {
+          "x": 0,
+          "y": 2100
+        }
+      }
+    },
+    {
+      "name": "send_message_admin",
+      "type": "send-message",
+      "transitions": [
+        {
+          "event": "sent"
+        },
+        {
+          "event": "failed"
+        }
+      ],
+      "properties": {
+        "offset": {
+          "x": -160,
+          "y": 2430
+        },
+        "service": "{{trigger.message.InstanceSid}}",
+        "channel": "{{trigger.message.ChannelSid}}",
+        "from": "{{flow.channel.address}}",
+        "message_type": "custom",
+        "to": "+19516628477",
+        "body": "From: {{widgets.A-Check_user.parsed.name}} (No Mentor) {{trigger.message.Body}}"
+      }
+    },
+    {
+      "name": "play_greeting",
+      "type": "say-play",
+      "transitions": [
+        {
+          "next": "VoiceTree",
+          "event": "audioComplete"
+        }
+      ],
+      "properties": {
+        "voice": "Polly.Ruth-Generative",
+        "offset": {
+          "x": 90,
+          "y": 410
+        },
+        "loop": 1,
+        "say": "Hello and thanks for calling the church in Lott. We are glad you called.",
+        "language": "en-US"
+      }
+    },
+    {
+      "name": "VoiceTree",
+      "type": "gather-input-on-call",
+      "transitions": [
+        {
+          "next": "Split_on_Digits",
+          "event": "keypress"
+        },
+        {
+          "event": "speech"
+        },
+        {
+          "event": "timeout"
+        }
+      ],
+      "properties": {
+        "voice": "Polly.Ruth-Generative",
+        "speech_timeout": "5",
+        "offset": {
+          "x": 650,
+          "y": 320
+        },
+        "loop": 2,
+        "finish_on_key": "#",
+        "say": "Please select from the following options\n\nFor the SERVE program and community service hours, press 1\n\nFor information about theCHURCH, please press 2\n\nTo leave a prayer request or a help request, please press 3\n\nTo leave a message, please press 0.",
+        "language": "en-US",
+        "stop_gather": true,
+        "gather_language": "en-US",
+        "speech_model": "default",
+        "profanity_filter": "true",
+        "timeout": 10
+      }
+    },
+    {
+      "name": "Split_on_Digits",
+      "type": "split-based-on",
+      "transitions": [
+        {
+          "next": "say_MESSAGE",
+          "event": "noMatch"
+        },
+        {
+          "next": "say_SERVE",
+          "event": "match",
+          "conditions": [
+            {
+              "friendly_name": "If value equal_to 1",
+              "arguments": [
+                "{{widgets.VoiceTree.Digits}}"
+              ],
+              "type": "equal_to",
+              "value": "1"
+            }
+          ]
+        },
+        {
+          "next": "say_INFO",
+          "event": "match",
+          "conditions": [
+            {
+              "friendly_name": "If value equal_to 2",
+              "arguments": [
+                "{{widgets.VoiceTree.Digits}}"
+              ],
+              "type": "equal_to",
+              "value": "2"
+            }
+          ]
+        },
+        {
+          "next": "say_PRAYER",
+          "event": "match",
+          "conditions": [
+            {
+              "friendly_name": "If value equal_to 3",
+              "arguments": [
+                "{{widgets.VoiceTree.Digits}}"
+              ],
+              "type": "equal_to",
+              "value": "3"
+            }
+          ]
+        },
+        {
+          "next": "say_MESSAGE",
+          "event": "match",
+          "conditions": [
+            {
+              "friendly_name": "If value equal_to 0",
+              "arguments": [
+                "{{widgets.VoiceTree.Digits}}"
+              ],
+              "type": "equal_to",
+              "value": "0"
+            }
+          ]
+        }
+      ],
+      "properties": {
+        "input": "{{widgets.VoiceTree.Digits}}",
+        "offset": {
+          "x": 560,
+          "y": 570
+        }
+      }
+    },
+    {
+      "name": "say_SERVE",
+      "type": "say-play",
+      "transitions": [
+        {
+          "next": "Copy_of_record_message",
+          "event": "audioComplete"
+        }
+      ],
+      "properties": {
+        "voice": "Polly.Ruth-Generative",
+        "offset": {
+          "x": 330,
+          "y": 950
+        },
+        "loop": 1,
+        "say": "SERVE is a program offering community service hours. We have regular jobs, projects and meetings  that all count towards court ordered community service hours.  Leave a message and we will call you back as soon as possible with information.",
+        "language": "en-US"
+      }
+    },
+    {
+      "name": "say_INFO",
+      "type": "say-play",
+      "transitions": [
+        {
+          "next": "VoiceTree",
+          "event": "audioComplete"
+        }
+      ],
+      "properties": {
+        "voice": "Polly.Stephen-Generative",
+        "offset": {
+          "x": 1300,
+          "y": 340
+        },
+        "loop": 1,
+        "say": "The Church is a local group of believers based in Lott, serving hte local area. We are bible believing, nondenominational, and community focused.  We host the central texas freedom that lasts meetings on friday evening, kids night on saturday evening, bible study and fellowship sunday morning and a free community meal every sunday at noon. The church is located at 2 16 Gassaway in lott, across from the post office on main street.",
+        "language": "en-US"
+      }
+    },
+    {
+      "name": "say_PRAYER",
+      "type": "say-play",
+      "transitions": [
+        {
+          "next": "Copy_of_record_message",
+          "event": "audioComplete"
+        }
+      ],
+      "properties": {
+        "voice": "Polly.Ruth-Generative",
+        "offset": {
+          "x": 750,
+          "y": 1020
+        },
+        "loop": 1,
+        "say": "We are here to help any way that we can. Please leave a message and let us know how we can serve you.",
+        "language": "en-US"
+      }
+    },
+    {
+      "name": "say_MESSAGE",
+      "type": "say-play",
+      "transitions": [
+        {
+          "next": "Copy_of_record_message",
+          "event": "audioComplete"
+        }
+      ],
+      "properties": {
+        "voice": "Polly.Ruth-Generative",
+        "offset": {
+          "x": 1240,
+          "y": 980
+        },
+        "loop": 1,
+        "say": "Please leave a message at the tone and we will get back to you as soon as possible.",
+        "language": "en-US"
+      }
+    },
+    {
+      "name": "Copy_of_record_message",
+      "type": "record-voicemail",
+      "transitions": [
+        {
+          "event": "recordingComplete"
+        },
+        {
+          "event": "noAudio"
+        },
+        {
+          "event": "hangup"
+        }
+      ],
+      "properties": {
+        "transcribe": true,
+        "offset": {
+          "x": 1260,
+          "y": 1270
+        },
+        "trim": "trim-silence",
+        "transcription_callback_url": "https://chmeetings-sms-1218.twil.io/process_voicemail",
+        "play_beep": "true",
+        "timeout": 5,
+        "max_length": 120
+      }
+    }
+  ]
+}
