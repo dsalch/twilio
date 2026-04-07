@@ -1,0 +1,20 @@
+exports.handler = async function(context, event, callback) {
+  // DEBUG: Print exactly what Studio sent
+  console.log(`[SMART WAIT] Received Parameters: ${JSON.stringify(event)}`);
+
+  let delay = parseInt(event.delay);
+  
+  // Safety Check: If Studio sends nothing, or garbage, default to 5000ms
+  if (isNaN(delay) || delay < 1000) {
+      console.log(`[SMART WAIT] Parameter '${event.delay}' was invalid. Forcing 5000ms default.`);
+      delay = 5000;
+  }
+  
+  console.log(`[SMART WAIT] Pausing for ${delay}ms...`);
+  
+  // The Blocking Promise (Forces the server to wait)
+  await new Promise(resolve => setTimeout(resolve, delay));
+  
+  console.log("[SMART WAIT] Finished.");
+  return callback(null, { status: "done" });
+};
