@@ -96,7 +96,10 @@ exports.handler = async function(context, event, callback) {
         const parts = group.name.split(NAME_SEPARATOR);
         if (parts.length < 2) continue;
 
-        const mentorNameRaw = parts[1].trim(); 
+        //    const mentorNameRaw = parts[1].trim(); 
+        // Use a Regular Expression to remove the word "Mentor" (case-insensitive) from the start
+        const mentorNameRaw = parts[1].trim().replace(/^mentor\s+/i, "");
+
         const mentor = allPeople.find(p => {
             const fullName = `${p.first_name} ${p.last_name}`.toLowerCase();
             return fullName === mentorNameRaw.toLowerCase();
