@@ -107,13 +107,22 @@ exports.handler = async function(context, event, callback) {
 
         if (mentor && (mentor.mobile || mentor.Mobile)) {
             const mentorPhone = mentor.mobile || mentor.Mobile;
-            
+    
+            // 1. Send the primary notification (No Link = Very high deliverability)
             await client.messages.create({
                 from: NOTIFICATION_SOURCE_NUM,
                 to: mentorPhone,
-                body: `From: ${senderName}\n"${messageBody}"\n\nReply: ${finalLink}`
+                body: `From: ${senderName}\n"${messageBody}"`
             });
-            
+    
+            // 2. Send the "Deep Link" as a separate bubble
+            // We add a tiny prefix so they know what the link is for
+            await client.messages.create({
+                from: NOTIFICATION_SOURCE_NUM,
+                to: mentorPhone,
+                body: `View ${senderProfile.first_name}'s profile: ${longLink}`
+            });
+    
             mentorsNotified.push(mentor.first_name);
         }
     }
